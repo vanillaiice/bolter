@@ -41,7 +41,7 @@ COPYRIGHT:
 	app := cli.NewApp()
 	app.Name = "bolter"
 	app.Usage = "view boltdb file interactively in your terminal"
-	app.Version = "2.0.1"
+	app.Version = "2.0.2"
 	app.Authors = []cli.Author{
 		{
 			Name:  "Hasit Mistry",
