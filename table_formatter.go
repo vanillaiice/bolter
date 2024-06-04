@@ -6,23 +6,29 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
-type tableFormatter struct {
+// TableFormatter is a formatter that prints in table format.
+type TableFormatter struct {
 	noValues bool
 }
 
-func (tf tableFormatter) DumpBuckets(w io.Writer, buckets []bucket) {
+// DumpBuckets prints in table format.
+func (tf TableFormatter) DumpBuckets(w io.Writer, buckets []Bucket) {
 	table := tablewriter.NewWriter(w)
 	table.SetHeader([]string{"Buckets"})
+
 	for _, b := range buckets {
 		row := []string{b.Name}
 		table.Append(row)
 	}
+
 	table.Render()
 }
 
-func (tf tableFormatter) DumpBucketItems(w io.Writer, bucket string, items []item) {
+// DumpBucketItems prints the bucket's items in table format.
+func (tf TableFormatter) DumpBucketItems(w io.Writer, bucket string, items []Item) {
 	table := tablewriter.NewWriter(w)
 	table.SetHeader([]string{"Key", "Value"})
+
 	for _, item := range items {
 		var row []string
 		if tf.noValues {
@@ -32,5 +38,6 @@ func (tf tableFormatter) DumpBucketItems(w io.Writer, bucket string, items []ite
 		}
 		table.Append(row)
 	}
+
 	table.Render()
 }

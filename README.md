@@ -1,26 +1,45 @@
 # bolter
 
-View BoltDB file in your terminal
+View BoltDB files in your terminal.
+This is a fork of [hasit/bolter](https://github.com/hasit/bolter), since it is has been unmaintained for around a year.
+This branch fixed a bug, comments the code, and aims to make he codebase cleaner.
 
 ![List all items](assets/viewbucket.gif)
 
 ## Install
 
 ```
-$ go get -u github.com/hasit/bolter
+$ go get -u github.com/vanillaiice/bolter
 ```
 
 ## Usage
 
 ```
-$ bolter [global options]
+NAME:
+   bolter - view boltdb files interactively in your terminal
+
+USAGE:
+    [global options] command [command options] [arguments...]
+
+VERSION:
+   2.0.3
+
+AUTHORS:
+   Hasit Mistry <hasitnm@gmailcom>
+   vanillaiice <vanillaiice1@proton.me>
+
+COMMANDS:
+   help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-  --file FILE, -f FILE        boltdb FILE to view
-  --bucket BUCKET, -b BUCKET  boltdb BUCKET to view
-  --machine, -m               key=value format
-  --help, -h                  show help
-  --version, -v               print the version
+   --file FILE, -f FILE  load boltdb FILE
+   --no-values           do not print values (use if values are huge and/or not printable)
+   --more more           use more to print all listings
+   --help, -h            show help
+   --version, -v         print the version
+
+COPYRIGHT:
+   (c) 2024 Hasit Mistry, vanillaiice
 ```
 
 ### List all buckets
@@ -110,4 +129,5 @@ nested-bucket*=
 
 ## Contribute
 
-Feel free to ask questions, post issues and open pull requests. My only requirement is that you run `gofmt` on your code before you send in a PR.
+Feel free to ask questions, post issues and open pull requests on github.
+When contributing, make sure to format your code with `gofmt`.

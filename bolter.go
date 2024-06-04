@@ -9,100 +9,145 @@ import (
 	"strings"
 
 	kval "github.com/kval-access-language/kval-boltdb"
-	"github.com/urfave/cli"
 )
 
-// Terminal lines...
+// instructionLine is used to display instructions in the terminal.
 const instructionLine = "> Enter bucket to explore (CTRL-X to quit, CTRL-B to go back, ENTER to go back to ROOT Bucket):"
+
+// goingBack is used to display 'going back' in the terminal.
 const goingBack = "> Going back..."
 
-func main() {
-	var file string
-	var noValues bool
-	var useMore bool
+// Impl holds the implementation details.
+type Impl struct {
+	kb     kval.Kvalboltdb // kb is the connection to the bolt database.
+	fmt    Formatter       // fmt is the formatter interface.
+	bucket string          // bucket is the bucket name.
+	loc    string          // loc is the current location in the database.
+	cache  string          // cache is the previous location in the database.
+	root   bool            // root is used to determine if we are in the ROOT bucket.
+}
 
-	cli.AppHelpTemplate = `NAME:
-  {{.Name}} - {{.Usage}}
-
-VERSION:
-  {{.Version}}
-
-USAGE:
-  {{.HelpName}} {{if .VisibleFlags}}[global options]{{end}}
-
-GLOBAL OPTIONS:
-  {{range .VisibleFlags}}{{.}}
-  {{end}}
-AUTHOR:
-  {{range .Authors}}{{ . }}{{end}}
-COPYRIGHT:
-  {{.Copyright}}
-`
-	app := cli.NewApp()
-	app.Name = "bolter"
-	app.Usage = "view boltdb file interactively in your terminal"
-	app.Version = "2.0.2"
-	app.Authors = []cli.Author{
-		{
-			Name:  "Hasit Mistry",
-			Email: "hasitnm@gmail.com",
-		},
+// initDB initializes the boltdb connection.
+func (i *Impl) initDB(file string) {
+	var err error
+	i.kb, err = kval.Connect(file)
+	if err != nil {
+		log.Fatal(err)
 	}
-	app.Copyright = "(c) 2016 Hasit Mistry"
-	app.Flags = []cli.Flag{
-		&cli.StringFlag{
-			Name:        "file, f",
-			Usage:       "boltdb `FILE` to view",
-			Destination: &file,
-		},
-		&cli.BoolFlag{
-			Name:        "no-values",
-			Usage:       "use if values are huge and/or not printable",
-			Destination: &noValues,
-		},
-		&cli.BoolFlag{
-			Name:        "more",
-			Usage:       "use `more` to print all listings. Should be available in path",
-			Destination: &useMore,
-		},
-	}
-	app.Action = func(c *cli.Context) error {
-		if file == "" {
-			cli.ShowAppHelp(c)
-			return nil
-		}
+}
 
-		var formatter formatter = &tableFormatter{
-			noValues: noValues,
-		}
-		if useMore {
-			formatter = &moreWrapFormatter{
-				formatter: formatter,
+// updateLoc updates the current location in the database.
+func (i *Impl) updateLoc(bucket string, goBack bool) string {
+	if bucket == i.cache {
+		i.loc = bucket
+		return i.loc
+	}
+
+	if goBack {
+		s := strings.Split(i.loc, ">>")
+		i.loc = strings.Join(s[:len(s)-1], ">>")
+		i.bucket = strings.Trim(s[len(s)-2], " ")
+		return i.loc
+	}
+
+	if i.loc == "" {
+		i.loc = bucket
+		i.bucket = bucket
+	} else {
+		i.loc = i.loc + " >> " + bucket
+		i.bucket = bucket
+	}
+
+	return i.loc
+}
+
+// listBucketItems lists the items in a bucket.
+func (i *Impl) listBucketItems(bucket string, goBack bool) {
+	items := []Item{}
+	getQuery := i.updateLoc(bucket, goBack)
+
+	if getQuery != "" {
+		fmt.Fprintf(os.Stdout, "Query: "+getQuery+"\n\n")
+		res, err := kval.Query(i.kb, "GET "+getQuery)
+		if err != nil {
+			if err.Error() == "No Keys: There are no key::value pairs in this bucket" {
+				fmt.Fprintf(os.Stdout, "> There are no key::value pairs in this bucket\n")
+				if i.root {
+					i.listBuckets()
+					return
+				}
+				i.listBucketItems(i.loc, true)
+			} else if err.Error() != "Cannot GOTO bucket, bucket not found" {
+				log.Fatal(err)
+			} else {
+				fmt.Fprintf(os.Stdout, "> Bucket not found\n")
+				if i.root {
+					i.listBuckets()
+					return
+				}
+				i.listBucketItems(i.loc, true)
 			}
 		}
 
-		var i impl
-		i = impl{fmt: formatter}
-		if _, err := os.Stat(file); os.IsNotExist(err) {
-			log.Fatal(err)
-			return err
+		if len(res.Result) == 0 {
+			fmt.Fprintf(os.Stdout, "Invalid request.\n\n")
+			i.listBucketItems(i.cache, false)
+			return
 		}
-		i.initDB(file)
-		defer kval.Disconnect(i.kb)
 
-		i.readInput()
+		for k, v := range res.Result {
+			if v == kval.Nestedbucket {
+				k = k + "*"
+				v = ""
+			}
+			items = append(items, Item{Key: string(k), Value: string(v)})
+		}
 
-		return nil
+		fmt.Fprintf(os.Stdout, "Bucket: %s\n", bucket)
+
+		i.fmt.DumpBucketItems(os.Stdout, i.bucket, items)
+
+		i.root = false
+
+		i.cache = getQuery
+
+		outputInstructionline()
 	}
-	app.Run(os.Args)
 }
 
-func (i *impl) readInput() {
+// listBuckets lists the buckets in the database.
+func (i *Impl) listBuckets() {
+	i.root = true
+	i.loc = ""
+
+	buckets := []Bucket{}
+
+	res, err := kval.Query(i.kb, "GET _")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for k := range res.Result {
+		buckets = append(buckets, Bucket{Name: string(k) + "*"})
+	}
+
+	fmt.Fprint(os.Stdout, "DB Layout:\n\n")
+
+	i.fmt.DumpBuckets(os.Stdout, buckets)
+
+	outputInstructionline()
+}
+
+// readInput reads user input from stdin.
+func (i *Impl) readInput() {
 	i.listBuckets()
+
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
-		bucket := scanner.Text()
 		fmt.Fprintln(os.Stdout, "")
+
+		bucket := scanner.Text()
+
 		switch bucket {
 		case "\x18":
 			return
@@ -119,137 +164,29 @@ func (i *impl) readInput() {
 		default:
 			i.listBucketItems(bucket, false)
 		}
+
 		bucket = ""
 	}
 }
 
-type formatter interface {
-	DumpBuckets(io.Writer, []bucket)
-	DumpBucketItems(io.Writer, string, []item)
+// Formatter interface.
+type Formatter interface {
+	DumpBuckets(io.Writer, []Bucket)
+	DumpBucketItems(io.Writer, string, []Item)
 }
 
-type impl struct {
-	kb     kval.Kvalboltdb
-	fmt    formatter
-	bucket string
-	loc    string // navigation, what is our requested location in the store?
-	cache  string // navigation, cache our last location to move back to
-	root   bool   // navigation, are we @ root bucket?
-}
-
-type item struct {
+// Item is a key/value pair in a bucket.
+type Item struct {
 	Key   string
 	Value string
 }
 
-type bucket struct {
+// Bucket is a bucket in the database.
+type Bucket struct {
 	Name string
 }
 
-func (i *impl) initDB(file string) {
-	var err error
-	// Connect to KVAL using KVAL default mechanism
-	// Can also use regular open plus perms, and kval.Attach()
-	i.kb, err = kval.Connect(file)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func (i *impl) updateLoc(bucket string, goBack bool) string {
-
-	// we've probably an invalid value and want to display
-	// ourselves again...
-	if bucket == i.cache {
-		i.loc = bucket
-		return i.loc
-	}
-
-	// handle goback
-	if goBack {
-		s := strings.Split(i.loc, ">>")
-		i.loc = strings.Join(s[:len(s)-1], ">>")
-		i.bucket = strings.Trim(s[len(s)-2], " ")
-		return i.loc
-	}
-
-	// handle location on merit...
-	if i.loc == "" {
-		i.loc = bucket
-		i.bucket = bucket
-	} else {
-		i.loc = i.loc + " >> " + bucket
-		i.bucket = bucket
-	}
-	return i.loc
-}
-
-func (i *impl) listBucketItems(bucket string, goBack bool) {
-	items := []item{}
-	getQuery := i.updateLoc(bucket, goBack)
-	if getQuery != "" {
-		fmt.Fprintf(os.Stdout, "Query: "+getQuery+"\n\n")
-		res, err := kval.Query(i.kb, "GET "+getQuery)
-		if err != nil {
-			if err.Error() == "No Keys: There are no key::value pairs in this bucket" {
-				// no values in this bucket
-				fmt.Fprintf(os.Stdout, "> There are no key::value pairs in this bucket\n")
-				if i.root == true {
-					i.listBuckets()
-					return
-				}
-				i.listBucketItems(i.loc, true)
-			} else if err.Error() != "Cannot GOTO bucket, bucket not found" {
-				log.Fatal(err)
-			} else {
-				fmt.Fprintf(os.Stdout, "> Bucket not found\n")
-				if i.root == true {
-					i.listBuckets()
-					return
-				}
-				i.listBucketItems(i.loc, true)
-			}
-		}
-		if len(res.Result) == 0 {
-			fmt.Fprintf(os.Stdout, "Invalid request.\n\n")
-			i.listBucketItems(i.cache, false)
-			return
-		}
-
-		for k, v := range res.Result {
-			if v == kval.Nestedbucket {
-				k = k + "*"
-				v = ""
-			}
-			items = append(items, item{Key: string(k), Value: string(v)})
-		}
-		fmt.Fprintf(os.Stdout, "Bucket: %s\n", bucket)
-		i.fmt.DumpBucketItems(os.Stdout, i.bucket, items)
-		i.root = false     // success this far means we're not at ROOT
-		i.cache = getQuery // so we can also set the query cache for paging
-		outputInstructionline()
-	}
-}
-
-func (i *impl) listBuckets() {
-	i.root = true
-	i.loc = ""
-
-	buckets := []bucket{}
-
-	res, err := kval.Query(i.kb, "GET _") // KVAL: "GET _" will return ROOT
-	if err != nil {
-		log.Fatal(err)
-	}
-	for k := range res.Result {
-		buckets = append(buckets, bucket{Name: string(k) + "*"})
-	}
-
-	fmt.Fprint(os.Stdout, "DB Layout:\n\n")
-	i.fmt.DumpBuckets(os.Stdout, buckets)
-	outputInstructionline()
-}
-
+// outputInstructionline outputs the instruction line.
 func outputInstructionline() {
 	fmt.Fprintf(os.Stdout, "\n%s\n\n", instructionLine)
 }
