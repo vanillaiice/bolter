@@ -2,7 +2,7 @@
 
 View BoltDB files in your terminal.
 This is a fork of [hasit/bolter](https://github.com/hasit/bolter), since it is has been unmaintained for around a year.
-This branch fixed a bug, comments the code, and aims to make he codebase cleaner.
+This branch fixes a bug, comments the code, and aims to make he codebase cleaner.
 
 ![List all items](assets/viewbucket.gif)
 
