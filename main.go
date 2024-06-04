@@ -9,7 +9,7 @@ import (
 )
 
 // appVersion is the current version of the app.
-const appVersion = "2.0.4"
+const appVersion = "2.0.5"
 
 func main() {
 	var file string

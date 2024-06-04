@@ -1,4 +1,4 @@
-module github.com/vanillaiice/bolter
+module github.com/vanillaiice/bolter/v2
 
 go 1.13
 
