@@ -1,6 +1,6 @@
 # bolter
 
-[![Go Reference](https://pkg.go.dev/badge/golang.org/x/example.svg)](https://pkg.go.dev/github.com/vanillaiice/bolter)
+[![Go Reference](https://pkg.go.dev/badge/golang.org/x/example.svg)](https://pkg.go.dev/github.com/vanillaiice/bolter/v2)
 
 View BoltDB files in your terminal.
 This is a fork of [hasit/bolter](https://github.com/hasit/bolter), since it is has been unmaintained for around a year.
