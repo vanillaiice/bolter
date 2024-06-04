@@ -9,7 +9,7 @@ This branch fixes a bug, comments the code, and aims to make he codebase cleaner
 ## Install
 
 ```
-$ go get -u github.com/vanillaiice/bolter
+$ go install github.com/vanillaiice/bolter/v2@latest
 ```
 
 ## Usage
